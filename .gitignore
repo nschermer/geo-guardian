@@ -1,0 +1,12 @@
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore by IDEs
+.vscode/
+.idea/
+
+*.mmdb
+app/geo-guardian
+benchtool/benchtool

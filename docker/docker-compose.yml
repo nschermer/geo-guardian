@@ -1,0 +1,38 @@
+volumes:
+  geoipupdate_data: {}
+
+services:
+  traefik:
+    image: traefik:latest
+    container_name: traefik_app
+    restart: unless-stopped
+    networks:
+      - default
+    labels:
+      traefik.http.middlewares.geoguardian.forwardauth.address: http://geoguardian/
+
+  geoipupdate:
+    container_name: "geoipupdate"
+    image: ghcr.io/maxmind/geoipupdate:latest
+    restart: unless-stopped
+    environment:
+      GEOIPUPDATE_ACCOUNT_ID: YOUR_ACCOUNT_ID
+      GEOIPUPDATE_LICENSE_KEY: YOUR_LICENSE_KEY
+      GEOIPUPDATE_EDITION_IDS: GeoLite2-Country
+      GEOIPUPDATE_FREQUENCY: 72
+    volumes:
+      - "geoipupdate_data:/usr/share/GeoIP"
+
+  geoguardian:
+    container_name: geoguardian
+    image: geo-guardian:latest
+    restart: unless-stopped
+    ports:
+      - "8080:80" # only needed if you want to collect or see metrics
+    networks:
+      - default
+    environment:
+      GEOIP2_DB: /usr/share/GeoIP/GeoLite2-Country.mmdb
+      ACCEPT_COUNTRY_CODES: NL,BE,LU
+    volumes:
+      - "geoipupdate_data:/usr/share/GeoIP:ro"
