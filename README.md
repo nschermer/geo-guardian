@@ -1,4 +1,4 @@
-# Geo Guardian - Go Version
+# Geo Guardian
 
 A high-performance GeoIP-based access control service written in Go.
 
@@ -19,10 +19,10 @@ You will need a (free) MaxMind account to obtain an account ID and license key b
 
 ## Features
 
-- **Fast GeoIP lookups** with caching (1000 entries cache)
-- **Periodic database reloads** (every 15 minutes) for automatic updates
-- **Thread-safe** reader management for hot reloading
-- **Minimal memory footprint** using Alpine Linux docker image
+- ⚡ **Fast GeoIP lookups** with caching (1000 entries cache)
+- 🔄 **Periodic database reloads** (every 15 minutes) for automatic updates
+- 🔒 **Thread-safe** reader management for hot reloading
+- 💾 **Minimal memory footprint** using Alpine Linux docker image
 
 ## Environment Variables
 
