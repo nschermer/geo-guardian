@@ -5,6 +5,9 @@ on:
     tags:
       - "v*.*.*"
 
+env:
+  DOCKER_IMAGE_NAME: geo-guardian
+
 jobs:
   build:
   
@@ -32,12 +35,9 @@ jobs:
       - name: Build and push Landing Page Docker image
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ./app/
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get_version.outputs.VERSION }}
-            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_NAME }}:latest
-          cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_NAME }}:buildcache,mode=max
-    
+            ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get_version.outputs.VERSION }}
+            ${{ env.DOCKER_IMAGE_NAME }}:latest
