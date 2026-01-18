@@ -32,11 +32,11 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-      - name: Build and push Landing Page Docker image
+      - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: ./app/
-          file: ./Dockerfile
+          context: .
+          file: ./app/Dockerfile
           push: true
           tags: |
             ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get_version.outputs.VERSION }}
