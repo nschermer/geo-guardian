@@ -1,5 +1,9 @@
 # Build stage
-FROM golang:1.25-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+
+ARG TARGETPLATFORM
+ARG TARGETARCH
+ARG TARGETOS
 
 WORKDIR /app
 
@@ -12,11 +16,11 @@ RUN go mod download
 # Copy source code
 COPY *.go ./
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o geo-guardian .
+# Build the application for the target platform
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -installsuffix cgo -o geo-guardian .
 
 # Runtime stage
-FROM alpine:latest
+FROM --platform=$TARGETPLATFORM alpine:latest
 
 RUN apk --no-cache add ca-certificates
 
