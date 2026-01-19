@@ -418,7 +418,7 @@ func main() {
 	// Read environment variables
 	localIPsStr := os.Getenv("LOCAL_IPS")
 	if localIPsStr == "" {
-		localIPsStr = "192.168.0.0/16,10.0.0.0/8,127.0.0.0/8"
+		localIPsStr = "192.168.0.0/16,10.0.0.0/8,127.0.0.0/8,fd00::/8"
 	}
 
 	countryCodesStr := os.Getenv("ACCEPT_COUNTRY_CODES")
