@@ -350,11 +350,11 @@ func parseLocalIPs(localIPsStr string) error {
 	return nil
 }
 
-func parseCountryCodes(countryCodesStr string) error {
-	countryCodes = make(map[string]bool)
+func parseCountryCodeList(countryCodesStr string, logLabel string) (map[string]bool, error) {
+	result := make(map[string]bool)
 
 	if countryCodesStr == "" {
-		return nil
+		return result, nil
 	}
 
 	var invalidCodes []string
@@ -370,56 +370,32 @@ func parseCountryCodes(countryCodesStr string) error {
 		if !valid {
 			invalidCodes = append(invalidCodes, code)
 		} else {
-			countryCodes[code] = true
+			result[code] = true
 			validCountries = append(validCountries, fmt.Sprintf("%s (%s)", countryName, code))
 		}
 	}
 
 	if len(invalidCodes) > 0 {
-		return fmt.Errorf("invalid ISO 3166-1 alpha-2 country codes: %s", strings.Join(invalidCodes, ", "))
+		return nil, fmt.Errorf("invalid ISO 3166-1 alpha-2 country codes: %s", strings.Join(invalidCodes, ", "))
 	}
 
 	if len(validCountries) > 0 {
-		logger.Printf("Allowed countries: %s\n", strings.Join(validCountries, ", "))
+		logger.Printf("%s countries: %s\n", logLabel, strings.Join(validCountries, ", "))
 	}
 
-	return nil
+	return result, nil
+}
+
+func parseCountryCodes(countryCodesStr string) error {
+	var err error
+	countryCodes, err = parseCountryCodeList(countryCodesStr, "Allowed")
+	return err
 }
 
 func parseBlockCountryCodes(countryCodesStr string) error {
-	blockCountryCodes = make(map[string]bool)
-
-	if countryCodesStr == "" {
-		return nil
-	}
-
-	var invalidCodes []string
-	var validCountries []string
-
-	for _, code := range strings.Split(countryCodesStr, ",") {
-		code = strings.TrimSpace(strings.ToUpper(code))
-		if code == "" {
-			continue
-		}
-
-		countryName, valid := validCountryCodes[code]
-		if !valid {
-			invalidCodes = append(invalidCodes, code)
-		} else {
-			blockCountryCodes[code] = true
-			validCountries = append(validCountries, fmt.Sprintf("%s (%s)", countryName, code))
-		}
-	}
-
-	if len(invalidCodes) > 0 {
-		return fmt.Errorf("invalid ISO 3166-1 alpha-2 country codes: %s", strings.Join(invalidCodes, ", "))
-	}
-
-	if len(validCountries) > 0 {
-		logger.Printf("Blocked countries: %s\n", strings.Join(validCountries, ", "))
-	}
-
-	return nil
+	var err error
+	blockCountryCodes, err = parseCountryCodeList(countryCodesStr, "Blocked")
+	return err
 }
 
 func parseBoolEnv(key string) bool {
