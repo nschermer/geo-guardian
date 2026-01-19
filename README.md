@@ -1,30 +1,56 @@
-# Geo Guardian
+# 🛡️ Geo Guardian
 
 A high-performance GeoIP-based access control service written in Go.
 
 This container is intended for use as a **ForwardAuth middleware in Traefik**, enabling geo-location based access control for your applications. See [Traefik ForwardAuth documentation](https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/forwardauth/) for integration details.
 
-## Overview
+## 🎯 Overview
 
 This service provides IP-based access control using GeoIP lookups and local IP allowlisting. It checks incoming requests against:
-1. Local IP ranges (configurable)
-2. Country codes (configurable)
+1. 🏠 Local IP ranges (configurable)
+2. 🌍 Country codes (configurable)
 
 Requests are allowed, or blocked, if they match either criteria.
 
-## GeoIP Database
+## ✨ Why Geo Guardian?
+
+### 🚀 **Easier Than Nginx + GeoIP2**
+- **No compilation hassles** - Pre-built Docker containers ready to use
+- Nginx with GeoIP2 module requires custom builds or hard-to-find pre-built images
+- Drop-in solution without complex module compilation
+
+### 🎛️ **Simpler Than Traefik GeoIP Plugins**
+- **Straightforward configuration** with environment variables
+- No complex plugin installation or middleware chain configuration
+- Clean integration via ForwardAuth middleware
+
+### 🔄 **Automated Database Updates**
+- **Easy to keep up-to-date** using MaxMind's official update tools
+- Automatic database reload every 15 minutes (no restarts needed)
+- Compatible with MaxMind's `geoipupdate` utility
+
+### 📊 **Built-in Observability**
+- **Native Prometheus metrics** for Grafana integration
+- Per-country, per-host statistics out of the box
+- Cache performance monitoring included
+- No additional plugins or exporters needed
+
+## 🎁 Features
+
+- ⚡ **Fast GeoIP lookups** with intelligent caching (1000 entries)
+- 🔄 **Hot database reloads** without restarts (every 15 minutes)
+- 🔒 **Thread-safe** concurrent request handling
+- 💾 **Minimal footprint** (~15MB Alpine-based container)
+- 🌐 **EU support** with single flag for all European Union countries
+- 📈 **Prometheus metrics** for monitoring and alerting
+- 🎨 **Flexible blocking** - allowlist or blocklist modes
+
+## 🗄️ GeoIP Database
 
 This service is designed to run with the free MaxMind GeoLite2 Country database. Download and update instructions are available in MaxMind's documentation: https://support.maxmind.com/knowledge-base/articles/download-and-update-maxmind-databases
 You will need a (free) MaxMind account to obtain an account ID and license key before downloading the database.
 
-## Features
-
-- ⚡ **Fast GeoIP lookups** with caching (1000 entries cache)
-- 🔄 **Periodic database reloads** (every 15 minutes) for automatic updates
-- 🔒 **Thread-safe** reader management for hot reloading
-- 💾 **Minimal memory footprint** using Alpine Linux docker image
-
-## Environment Variables
+## ⚙️ Environment Variables
 
 - `GEOIP2_DB` (required): Path to GeoIP2 database file (e.g., `/data/GeoLite2-Country.mmdb`)
 - `HOST_ADDR` (optional): Server host address to listen on
@@ -40,7 +66,7 @@ You will need a (free) MaxMind account to obtain an account ID and license key b
 - `VERBOSE` (optional): Enables verbose logging of allowed and blocked requests
   - Default: `false`
 
-## Building
+## 🔨 Building
 
 ### Native Build
 
@@ -54,7 +80,7 @@ go build -o geo-guardian *main*.go
 docker build -f Dockerfile -t geo-guardian:go .
 ```
 
-## Running
+## 🚀 Running
 
 ### Native
 
@@ -71,14 +97,14 @@ export HOST_ADDR=:8080
 ```bash
 docker run -d \
   -e GEOIP2_DB=/data/GeoLite2-Country.mmdb \
-  -e ACCEPT_COUNTRY_CODES=US,CA,GB \
+  -e ACCEPT_COUNTRY_CODES=NL,BE,LU \
   -v /path/to/geoip/db:/data \
   geo-guardian:go
 ```
 
 A sample Docker Compose setup is available at [docker/docker-compose.yml](docker/docker-compose.yml).
 
-## Benchmark Tool
+## 📊 Benchmark Tool
 
 There is a simple load generator in [benchtool/benchtool.go](benchtool/benchmark.go#L1) that sends 10,000 requests with synthetic `X-Forwarded-For` addresses (10% local-network IPs). Run it against a target server and port to gauge response latency and cache behavior:
 
@@ -88,7 +114,7 @@ go run ./benchtool/benchtool.go localhost 8080
 
 The tool prints mean, median, p99, min, and max latencies for the successful requests.
 
-## API
+## 🔌 API
 
 ### `GET /`
 
@@ -120,7 +146,7 @@ Exposes Prometheus-compatible metrics for monitoring.
 
 This endpoint can be scraped by **Prometheus**, **Victoria Metrics**, or any Prometheus-compatible monitoring system.
 
-## Dependencies
+## 📦 Dependencies
 
 - [geoip2-golang](https://github.com/oschwald/geoip2-golang) - MaxMind GeoIP2 reader
 
