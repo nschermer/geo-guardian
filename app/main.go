@@ -235,6 +235,17 @@ func logDecision(action, ip, country, host, reason string) {
 	logger.Printf("%s ip=%s country=%s host=%s reason=%s", strings.ToUpper(action), ip, country, host, reason)
 }
 
+func allowResponse(w http.ResponseWriter, country, host string) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+	metrics.RecordAllowedRequest(country, host)
+}
+
+func denyResponse(w http.ResponseWriter, country, host string) {
+	http.Error(w, "Forbidden", http.StatusForbidden)
+	metrics.RecordBlockedRequest(country, host)
+}
+
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	// Read IP address from X-Forwarded-For header
 	// Handle comma-separated list, take first IP (actual client)
@@ -263,10 +274,8 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	// Check if IP overlaps with LOCAL_IP_NETWORKS
 	for _, prefix := range localIPNetworks {
 		if prefix.Contains(ipAddress) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("OK"))
+			allowResponse(w, "", requestedHost)
 			metrics.RecordInternalRequest()
-			metrics.RecordAllowedRequest("", requestedHost)
 			logDecision("allow", ipAddressStr, "", requestedHost, "local_network")
 			return
 		}
@@ -274,8 +283,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Skip GeoIP lookup only when no country codes or EU acceptance or block list are configured
 	if len(countryCodes) == 0 && !acceptEuropeanUnion && len(blockCountryCodes) == 0 {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		metrics.RecordBlockedRequest("", requestedHost)
+		denyResponse(w, "", requestedHost)
 		logDecision("block", ipAddressStr, "", requestedHost, "no_rules_configured")
 		return
 	}
@@ -285,8 +293,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	countryCode := countryInfo.Code
 
 	if countryCode == "" {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		metrics.RecordBlockedRequest("", requestedHost)
+		denyResponse(w, "", requestedHost)
 		logDecision("block", ipAddressStr, "", requestedHost, "unknown_country")
 		return
 	}
@@ -294,15 +301,12 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	// Block mode: reject if country is in BLOCK_COUNTRY_CODES
 	if len(blockCountryCodes) > 0 {
 		if blockCountryCodes[countryCode] {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			metrics.RecordBlockedRequest(countryCode, requestedHost)
+			denyResponse(w, countryCode, requestedHost)
 			logDecision("block", ipAddressStr, countryCode, requestedHost, "blocked_country")
 			return
 		}
 		// If not in block list, allow
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-		metrics.RecordAllowedRequest(countryCode, requestedHost)
+		allowResponse(w, countryCode, requestedHost)
 		logDecision("allow", ipAddressStr, countryCode, requestedHost, "not_in_block_list")
 		return
 	}
@@ -310,9 +314,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	// Accept EU members when the feature flag is enabled
 	// Check if country is in ACCEPT_COUNTRY_CODES
 	if (acceptEuropeanUnion && countryInfo.InEU) || countryCodes[countryCode] {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-		metrics.RecordAllowedRequest(countryCode, requestedHost)
+		allowResponse(w, countryCode, requestedHost)
 		if acceptEuropeanUnion && countryInfo.InEU {
 			logDecision("allow", ipAddressStr, countryCode, requestedHost, "eu_member")
 		} else {
@@ -322,8 +324,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// No match found
-	http.Error(w, "Forbidden", http.StatusForbidden)
-	metrics.RecordBlockedRequest(countryCode, requestedHost)
+	denyResponse(w, countryCode, requestedHost)
 	logDecision("block", ipAddressStr, countryCode, requestedHost, "not_allowed")
 }
 
