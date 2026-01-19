@@ -68,10 +68,20 @@ You will need a (free) MaxMind account to obtain an account ID and license key b
 
 ## 🔨 Building
 
+### 🐳 Pre-built Docker Images
+
+Pre-built images are available on Docker Hub:
+
+**[nschermer/geo-guardian](https://hub.docker.com/r/nschermer/geo-guardian)**
+
+```bash
+docker pull nschermer/geo-guardian:latest
+```
+
 ### Native Build
 
 ```bash
-go build -o geo-guardian *main*.go
+go build -o geo-guardian
 ```
 
 ### Docker Build
