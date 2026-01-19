@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.25-windowsservercore AS builder
+FROM golang:1.25-windowsservercore-ltsc2022 AS builder
 
 ARG TARGETPLATFORM
 ARG TARGETARCH
