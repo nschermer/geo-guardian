@@ -4,26 +4,25 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 )
 
 // Metrics tracks request statistics
 type Metrics struct {
 	mu                sync.RWMutex
-	internalAccepted  int64
+	internalAccepted  atomic.Int64
+	cacheHits         atomic.Int64
+	cacheMisses       atomic.Int64
 	blockedPerCountry map[string]int64
 	allowedPerCountry map[string]int64
 	blockedPerHost    map[string]int64
 	allowedPerHost    map[string]int64
-	cacheHits         int64
-	cacheMisses       int64
 	geoipNodeCount    uint
 	geoipBuildEpoch   uint
 }
 
 func (m *Metrics) RecordInternalRequest() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.internalAccepted++
+	m.internalAccepted.Add(1)
 }
 
 func (m *Metrics) RecordAllowedRequest(country, host string) {
@@ -61,15 +60,11 @@ func (m *Metrics) RecordAllowedHost(host string) {
 }
 
 func (m *Metrics) RecordCacheHit() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.cacheHits++
+	m.cacheHits.Add(1)
 }
 
 func (m *Metrics) RecordCacheMiss() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.cacheMisses++
+	m.cacheMisses.Add(1)
 }
 
 func (m *Metrics) SetGeoIPInfo(nodeCount uint, buildEpoch uint) {
@@ -82,7 +77,7 @@ func (m *Metrics) SetGeoIPInfo(nodeCount uint, buildEpoch uint) {
 func (m *Metrics) GetStats() (internal int64, cacheHits int64, cacheMisses int64, geoipNodeCount uint, geoipBuildEpoch uint) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.internalAccepted, m.cacheHits, m.cacheMisses, m.geoipNodeCount, m.geoipBuildEpoch
+	return m.internalAccepted.Load(), m.cacheHits.Load(), m.cacheMisses.Load(), m.geoipNodeCount, m.geoipBuildEpoch
 }
 
 func (m *Metrics) GetCountryStats() (blocked map[string]int64, allowed map[string]int64) {
