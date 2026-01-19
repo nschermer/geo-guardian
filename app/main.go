@@ -137,7 +137,9 @@ func (g *GeoIPDB) Load() error {
 
 	// Skip reload if file hasn't changed
 	if !g.modTime.IsZero() && modTime.Equal(g.modTime) {
-		logger.Printf("GeoIP2 database unchanged, skipping reload\n")
+		if verboseLogging {
+			logger.Printf("GeoIP2 database unchanged, skipping reload\n")
+		}
 		return nil
 	}
 
@@ -161,7 +163,7 @@ func (g *GeoIPDB) Load() error {
 	metadata := newReader.Metadata()
 	metrics.SetGeoIPInfo(metadata.NodeCount, metadata.BuildEpoch)
 
-	logger.Printf("GeoIP2 database loaded at %s\n", time.Now().Format(time.RFC3339))
+	logger.Printf("GeoIP2 database loaded, build date: %s\n", time.Unix(int64(metadata.BuildEpoch), 0).UTC().Format(time.RFC3339))
 
 	// Clear cache after reload
 	countryCache.Clear()
@@ -432,7 +434,7 @@ func main() {
 
 	verboseLogging = parseBoolEnv("VERBOSE")
 
-	logger.Printf("Geo Guardian version=%s build_date=%s", version, buildDate)
+	logger.Printf("Geo Guardian version %s build %s", version, buildDate)
 
 	// Validate mutual exclusivity
 	if blockCountryCodesStr != "" && (countryCodesStr != "" || acceptEuropeanUnion) {
