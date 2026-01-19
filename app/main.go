@@ -434,7 +434,7 @@ func main() {
 
 	verboseLogging = parseBoolEnv("VERBOSE")
 
-	logger.Printf("Geo Guardian version %s build %s", version, buildDate)
+	logger.Printf("Geo Guardian version %s (%s)", version, buildDate)
 
 	// Validate mutual exclusivity
 	if blockCountryCodesStr != "" && (countryCodesStr != "" || acceptEuropeanUnion) {
