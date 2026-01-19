@@ -1,0 +1,32 @@
+# Build stage
+FROM golang:1.25-windowsservercore AS builder
+
+ARG TARGETPLATFORM
+ARG TARGETARCH
+ARG TARGETOS
+
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY *.go ./
+
+# Build the application for Windows
+RUN CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -a -installsuffix cgo -o geo-guardian.exe .
+
+# Runtime stage - Nano Server (lightweight)
+FROM mcr.microsoft.com/windows/nanoserver:ltsc2022
+
+WORKDIR /app
+
+# Copy the binary from builder
+COPY --from=builder /app/geo-guardian.exe .
+
+EXPOSE 80
+
+CMD ["geo-guardian.exe"]
