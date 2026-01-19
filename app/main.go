@@ -52,6 +52,8 @@ var (
 	blockCountryCodes   map[string]bool
 	acceptEuropeanUnion bool
 	verboseLogging      bool
+	version             = "dev"
+	buildDate           = "unknown"
 
 	geoipDB      *GeoIPDB
 	countryCache = newCountryCache(1000)
@@ -429,6 +431,8 @@ func main() {
 	}
 
 	verboseLogging = parseBoolEnv("VERBOSE")
+
+	logger.Printf("Geo Guardian version=%s build_date=%s", version, buildDate)
 
 	// Validate mutual exclusivity
 	if blockCountryCodesStr != "" && (countryCodesStr != "" || acceptEuropeanUnion) {
