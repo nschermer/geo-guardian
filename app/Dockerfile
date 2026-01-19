@@ -1,5 +1,5 @@
 # Build stage
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 ARG TARGETPLATFORM
 ARG TARGETARCH
@@ -20,7 +20,7 @@ COPY *.go ./
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -installsuffix cgo -o geo-guardian .
 
 # Runtime stage
-FROM --platform=$TARGETPLATFORM alpine:latest
+FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
 

@@ -1,5 +1,5 @@
 # Build stage
-FROM --platform=$BUILDPLATFORM golang:1.25-windowsservercore AS builder
+FROM golang:1.25-windowsservercore AS builder
 
 ARG TARGETPLATFORM
 ARG TARGETARCH
@@ -20,7 +20,7 @@ COPY *.go ./
 RUN CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -a -installsuffix cgo -o geo-guardian.exe .
 
 # Runtime stage
-FROM --platform=$TARGETPLATFORM mcr.microsoft.com/windows/servercore:ltsc2022
+FROM mcr.microsoft.com/windows/servercore:ltsc2022
 
 WORKDIR /app
 
