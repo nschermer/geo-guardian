@@ -37,7 +37,7 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           else
-            echo "VERSION=dev" >> $GITHUB_OUTPUT
+            echo "VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           fi
 
       - name: Set build metadata
