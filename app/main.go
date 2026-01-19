@@ -430,6 +430,10 @@ func main() {
 		logger.Fatal("BLOCK_COUNTRY_CODES cannot be used with ACCEPT_COUNTRY_CODES or ACCEPT_EUROPEAN_UNION")
 	}
 
+	if countryCodesStr == "" && !acceptEuropeanUnion && blockCountryCodesStr == "" {
+		logger.Println("Warning: No country filtering configured (ACCEPT_COUNTRY_CODES, ACCEPT_EUROPEAN_UNION, or BLOCK_COUNTRY_CODES)")
+	}
+
 	// Validate GEOIP2_DB path
 	if geoip2DBPath == "" {
 		logger.Fatal("GEOIP2_DB environment variable is not set")
