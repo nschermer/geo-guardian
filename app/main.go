@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -347,6 +348,11 @@ func parseLocalIPs(localIPsStr string) error {
 
 		localIPNetworks = append(localIPNetworks, prefix)
 	}
+
+	// Sort prefixes by size (larger masks first) for faster matching
+	slices.SortFunc(localIPNetworks, func(a, b netip.Prefix) int {
+		return b.Bits() - a.Bits()
+	})
 
 	return nil
 }
