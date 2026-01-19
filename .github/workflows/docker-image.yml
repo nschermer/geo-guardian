@@ -33,7 +33,12 @@ jobs:
 
       - name: Get the tag name
         id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=dev" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build and push Docker image (Linux)
         uses: docker/build-push-action@v6
@@ -68,7 +73,13 @@ jobs:
 
       - name: Get the tag name
         id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        run: |
+          if ($env:GITHUB_REF -like "refs/tags/*") {
+            $version = $env:GITHUB_REF -replace "refs/tags/", ""
+            echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          } else {
+            echo "VERSION=dev" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          }
 
       - name: Build and push Docker image (Windows Server Core)
         uses: docker/build-push-action@v6
