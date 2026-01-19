@@ -292,7 +292,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("OK"))
 		metrics.RecordAllowedRequest(countryCode, requestedHost)
 		if acceptEuropeanUnion && countryInfo.InEU {
-			logDecision("allow", ipAddressStr, countryCode, requestedHost, "eu_ember")
+			logDecision("allow", ipAddressStr, countryCode, requestedHost, "eu_member")
 		} else {
 			logDecision("allow", ipAddressStr, countryCode, requestedHost, "allowed_country")
 		}
