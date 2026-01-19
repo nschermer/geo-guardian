@@ -16,7 +16,6 @@ type Metrics struct {
 	allowedPerHost    map[string]int64
 	cacheHits         int64
 	cacheMisses       int64
-	cacheResets       int64
 	geoipNodeCount    uint
 	geoipBuildEpoch   uint
 }
@@ -73,12 +72,6 @@ func (m *Metrics) RecordCacheMiss() {
 	m.cacheMisses++
 }
 
-func (m *Metrics) RecordCacheReset() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.cacheResets++
-}
-
 func (m *Metrics) SetGeoIPInfo(nodeCount uint, buildEpoch uint) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -86,10 +79,10 @@ func (m *Metrics) SetGeoIPInfo(nodeCount uint, buildEpoch uint) {
 	m.geoipBuildEpoch = buildEpoch
 }
 
-func (m *Metrics) GetStats() (internal int64, cacheHits int64, cacheMisses int64, cacheResets int64, geoipNodeCount uint, geoipBuildEpoch uint) {
+func (m *Metrics) GetStats() (internal int64, cacheHits int64, cacheMisses int64, geoipNodeCount uint, geoipBuildEpoch uint) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.internalAccepted, m.cacheHits, m.cacheMisses, m.cacheResets, m.geoipNodeCount, m.geoipBuildEpoch
+	return m.internalAccepted, m.cacheHits, m.cacheMisses, m.geoipNodeCount, m.geoipBuildEpoch
 }
 
 func (m *Metrics) GetCountryStats() (blocked map[string]int64, allowed map[string]int64) {
@@ -129,7 +122,7 @@ func (m *Metrics) GetHostStats() (blocked map[string]int64, allowed map[string]i
 }
 
 func metricsHandler(w http.ResponseWriter, r *http.Request) {
-	internal, cacheHits, cacheMisses, cacheResets, geoipNodeCount, geoipBuildEpoch := metrics.GetStats()
+	internal, cacheHits, cacheMisses, geoipNodeCount, geoipBuildEpoch := metrics.GetStats()
 	blockedPerCountry, allowedPerCountry := metrics.GetCountryStats()
 	blockedPerHost, allowedPerHost := metrics.GetHostStats()
 
@@ -147,10 +140,6 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "# HELP cache_misses_total Counter of cache misses\n")
 	fmt.Fprintf(w, "# TYPE cache_misses_total counter\n")
 	fmt.Fprintf(w, "cache_misses_total %d\n\n", cacheMisses)
-
-	fmt.Fprintf(w, "# HELP cache_resets_total Counter of cache resets\n")
-	fmt.Fprintf(w, "# TYPE cache_resets_total counter\n")
-	fmt.Fprintf(w, "cache_resets_total %d\n\n", cacheResets)
 
 	fmt.Fprintf(w, "# HELP geoip_node_count Total number of nodes in GeoIP database\n")
 	fmt.Fprintf(w, "# TYPE geoip_node_count gauge\n")

@@ -147,7 +147,6 @@ Exposes Prometheus-compatible metrics for monitoring.
   - `accepted_internal_total` - Counter of internal network requests accepted
   - `cache_hits_total` - Counter of cache hits
   - `cache_misses_total` - Counter of cache misses
-  - `cache_resets_total` - Counter of cache resets
   - `geoip_node_count` - Total number of nodes in GeoIP database
   - `accepted_country_total` - Counter of requests accepted per country (only if non-empty)
   - `blocked_country_total` - Counter of requests blocked per country (only if non-empty)

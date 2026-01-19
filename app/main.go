@@ -1,6 +1,7 @@
 package main
 
 import (
+	"container/list"
 	"context"
 	"fmt"
 	"log"
@@ -24,11 +25,17 @@ type GeoIPDB struct {
 	modTime time.Time
 }
 
-// CountryCache implements a lazy cache for country code lookups
+// CountryCache implements an LRU cache for country code lookups
 type CountryCache struct {
 	mu      sync.RWMutex
-	cache   map[string]CountryInfo
+	cache   map[string]*list.Element
+	list    *list.List
 	maxSize int
+}
+
+type cacheEntry struct {
+	key  string
+	info CountryInfo
 }
 
 // CountryInfo stores GeoIP-derived country information for a lookup
@@ -64,41 +71,56 @@ func newGeoIPDB(path string) *GeoIPDB {
 
 func newCountryCache(maxSize int) *CountryCache {
 	return &CountryCache{
-		cache:   make(map[string]CountryInfo),
+		cache:   make(map[string]*list.Element),
+		list:    list.New(),
 		maxSize: maxSize,
 	}
 }
 
 func (c *CountryCache) Get(ip string) (CountryInfo, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	info, found := c.cache[ip]
-	return info, found
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	elem, found := c.cache[ip]
+	if !found {
+		return CountryInfo{}, false
+	}
+	// Move to front (most recently used)
+	c.list.MoveToFront(elem)
+	return elem.Value.(cacheEntry).info, true
 }
 
 func (c *CountryCache) Set(ip string, info CountryInfo) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Simple eviction: clear cache when it exceeds maxSize
-	if len(c.cache) >= c.maxSize {
-		c.cache = make(map[string]CountryInfo)
-		metrics.RecordCacheReset()
+	// If key already exists, update it and move to front
+	if elem, found := c.cache[ip]; found {
+		elem.Value = cacheEntry{key: ip, info: info}
+		c.list.MoveToFront(elem)
+		return
 	}
 
-	c.cache[ip] = info
+	// If cache is at maxSize, remove least recently used (back of list)
+	if len(c.cache) >= c.maxSize {
+		lruElem := c.list.Back()
+		if lruElem != nil {
+			lruEntry := lruElem.Value.(cacheEntry)
+			c.list.Remove(lruElem)
+			delete(c.cache, lruEntry.key)
+		}
+	}
+
+	// Add new entry to front (most recently used)
+	elem := c.list.PushFront(cacheEntry{key: ip, info: info})
+	c.cache[ip] = elem
 }
 
 func (c *CountryCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	metrics.RecordCacheReset()
-	if len(c.cache) > 0 {
-		metrics.RecordCacheReset()
-	}
-
-	c.cache = make(map[string]CountryInfo)
+	c.cache = make(map[string]*list.Element)
+	c.list = list.New()
 }
 
 func (g *GeoIPDB) Load() error {
