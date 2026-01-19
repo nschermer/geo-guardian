@@ -154,7 +154,7 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, "# HELP geoip_node_count Total number of nodes in GeoIP database\n")
 	fmt.Fprintf(w, "# TYPE geoip_node_count gauge\n")
-	fmt.Fprintf(w, "geoip_node_count{build_epoch=\"%d\"} %d\n\n", geoipNodeCount, geoipBuildEpoch)
+	fmt.Fprintf(w, "geoip_node_count{build_epoch=\"%d\"} %d\n\n", geoipBuildEpoch, geoipNodeCount)
 
 	if len(allowedPerCountry) > 0 {
 		fmt.Fprintf(w, "# HELP accepted_country_total Counter of requests accepted per country\n")
