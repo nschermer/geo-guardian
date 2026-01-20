@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"container/list"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/netip"
@@ -45,6 +47,15 @@ type CountryInfo struct {
 	InEU bool
 }
 
+// BlockList manages IP addresses from remote blocklists
+type BlockList struct {
+	mu        sync.RWMutex
+	url       string
+	ips       map[string]bool // Individual IPs mapped by string representation
+	lastFetch time.Time
+	timeout   time.Duration
+}
+
 var (
 	// Configuration
 	localIPNetworks     []netip.Prefix
@@ -64,6 +75,8 @@ var (
 		blockedPerHost:    make(map[string]int64),
 		allowedPerHost:    make(map[string]int64),
 	}
+	blocklists       []*BlockList
+	blocklistTimeout = 10 * time.Second
 )
 
 func newGeoIPDB(path string) *GeoIPDB {
@@ -78,6 +91,102 @@ func newCountryCache(maxSize int) *CountryCache {
 		list:    list.New(),
 		maxSize: maxSize,
 	}
+}
+
+func newBlockList(url string) *BlockList {
+	return &BlockList{
+		url:     url,
+		ips:     make(map[string]bool),
+		timeout: blocklistTimeout,
+	}
+}
+
+// Fetch downloads and parses the blocklist
+// Format: one IP (192.0.2.1) or range (192.0.2.0-192.0.2.255) per line
+func (bl *BlockList) Fetch() error {
+	ctx, cancel := context.WithTimeout(context.Background(), bl.timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", bl.url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request for blocklist %s: %w", bl.url, err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to fetch blocklist %s: %w", bl.url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("blocklist %s returned status %d", bl.url, resp.StatusCode)
+	}
+
+	newIPs := make(map[string]bool)
+
+	scanner := bufio.NewScanner(io.LimitReader(resp.Body, 10*1024*1024)) // 10MB limit
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Try to parse as individual IP
+		if addr, err := netip.ParseAddr(line); err == nil {
+			newIPs[addr.String()] = true
+			continue
+		}
+
+		// Notify about CIDR ranges - not supported
+		if strings.Contains(line, "/") {
+			logger.Printf("Warning: CIDR range format not supported in blocklist %s: %s\n", bl.url, line)
+			continue
+		}
+
+		// Notify about ranges (start-end format) - not supported
+		if strings.Contains(line, "-") {
+			parts := strings.Split(line, "-")
+			if len(parts) == 2 {
+				if _, err1 := netip.ParseAddr(strings.TrimSpace(parts[0])); err1 == nil {
+					if _, err2 := netip.ParseAddr(strings.TrimSpace(parts[1])); err2 == nil {
+						logger.Printf("Warning: IP range format not supported in blocklist %s: %s\n", bl.url, line)
+						continue
+					}
+				}
+			}
+		}
+
+		if verboseLogging {
+			logger.Printf("Warning: Invalid entry in blocklist %s: %s\n", bl.url, line)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading blocklist %s: %w", bl.url, err)
+	}
+
+	bl.mu.Lock()
+	bl.ips = newIPs
+	bl.lastFetch = time.Now()
+	bl.mu.Unlock()
+
+	logger.Printf("Blocklist %s loaded: %d IPs\n", bl.url, len(newIPs))
+	return nil
+}
+
+// Contains checks if an IP is in the blocklist
+func (bl *BlockList) Contains(ip netip.Addr) bool {
+	bl.mu.RLock()
+	defer bl.mu.RUnlock()
+
+	// Check individual IPs
+	if bl.ips[ip.String()] {
+		return true
+	}
+
+	return false
 }
 
 func (c *CountryCache) Get(ip string) (CountryInfo, bool) {
@@ -233,6 +342,24 @@ func reloadGeoIPPeriodically(ctx context.Context) {
 	}
 }
 
+func fetchBlocklistsPeriodically(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			for _, blocklist := range blocklists {
+				if err := blocklist.Fetch(); err != nil {
+					logger.Printf("Error fetching blocklist %s: %v\n", blocklist.url, err)
+				}
+			}
+		}
+	}
+}
+
 func logDecision(action, ip, country, host, reason string) {
 	if !verboseLogging {
 		return
@@ -283,6 +410,16 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 			allowResponse(w, "", requestedHost)
 			metrics.RecordInternalRequest()
 			logDecision("allow", ipAddressStr, "", requestedHost, "local_network")
+			return
+		}
+	}
+
+	// Check blocklists
+	for _, blocklist := range blocklists {
+		if blocklist.Contains(ipAddress) {
+			denyResponse(w, "", requestedHost)
+			metrics.RecordBlockedFromBlocklist()
+			logDecision("block", ipAddressStr, "", requestedHost, "blocklist")
 			return
 		}
 	}
@@ -426,6 +563,23 @@ func main() {
 	blockCountryCodesStr := os.Getenv("BLOCK_COUNTRY_CODES")
 	geoip2DBPath := os.Getenv("GEOIP2_DB")
 	acceptEuropeanUnion = parseBoolEnv("ACCEPT_EUROPEAN_UNION")
+	blocklistURLsStr := os.Getenv("BLOCKLIST_URLS")
+	blocklistIntervalStr := os.Getenv("BLOCKLIST_INTERVAL")
+
+	// Parse blocklist interval, default to 1 hour, minimum 15 minutes
+	blocklistInterval := 1 * time.Hour
+	if blocklistIntervalStr != "" {
+		if d, err := time.ParseDuration(blocklistIntervalStr); err == nil {
+			if d < 15*time.Minute {
+				logger.Printf("Warning: BLOCKLIST_INTERVAL %s is less than 15 minutes, using 15m\n", blocklistIntervalStr)
+				blocklistInterval = 15 * time.Minute
+			} else {
+				blocklistInterval = d
+			}
+		} else {
+			logger.Printf("Warning: Invalid BLOCKLIST_INTERVAL %s, using default 1h\n", blocklistIntervalStr)
+		}
+	}
 
 	// Read host address, default to :80
 	hostAddr := os.Getenv("HOST_ADDR")
@@ -479,10 +633,31 @@ func main() {
 	}
 	defer geoipDB.Close()
 
+	// Initialize and load blocklists if configured
+	if blocklistURLsStr != "" {
+		for _, url := range strings.Split(blocklistURLsStr, ",") {
+			url = strings.TrimSpace(url)
+			if url == "" {
+				continue
+			}
+			blocklist := newBlockList(url)
+			if err := blocklist.Fetch(); err != nil {
+				logger.Printf("Error loading blocklist %s: %v\n", url, err)
+			}
+			blocklists = append(blocklists, blocklist)
+		}
+		if len(blocklists) > 0 {
+			logger.Printf("Loaded %d blocklists\n", len(blocklists))
+		}
+	}
+
 	// Start periodic reload in background
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go reloadGeoIPPeriodically(ctx)
+	if len(blocklists) > 0 {
+		go fetchBlocklistsPeriodically(ctx, blocklistInterval)
+	}
 
 	// Setup HTTP server
 	http.HandleFunc("/", indexHandler)

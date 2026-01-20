@@ -10,20 +10,25 @@ import (
 
 // Metrics tracks request statistics
 type Metrics struct {
-	mu                sync.RWMutex
-	internalAccepted  atomic.Int64
-	cacheHits         atomic.Int64
-	cacheMisses       atomic.Int64
-	blockedPerCountry map[string]int64
-	allowedPerCountry map[string]int64
-	blockedPerHost    map[string]int64
-	allowedPerHost    map[string]int64
-	geoipNodeCount    uint
-	geoipBuildEpoch   time.Time
+	mu                   sync.RWMutex
+	internalAccepted     atomic.Int64
+	cacheHits            atomic.Int64
+	cacheMisses          atomic.Int64
+	blockedFromBlocklist atomic.Int64
+	blockedPerCountry    map[string]int64
+	allowedPerCountry    map[string]int64
+	blockedPerHost       map[string]int64
+	allowedPerHost       map[string]int64
+	geoipNodeCount       uint
+	geoipBuildEpoch      time.Time
 }
 
 func (m *Metrics) RecordInternalRequest() {
 	m.internalAccepted.Add(1)
+}
+
+func (m *Metrics) RecordBlockedFromBlocklist() {
+	m.blockedFromBlocklist.Add(1)
 }
 
 func (m *Metrics) RecordAllowedRequest(country, host string) {
@@ -75,10 +80,10 @@ func (m *Metrics) SetGeoIPInfo(nodeCount uint, buildEpoch time.Time) {
 	m.geoipBuildEpoch = buildEpoch
 }
 
-func (m *Metrics) GetStats() (internal int64, cacheHits int64, cacheMisses int64, geoipNodeCount uint, geoipBuildEpoch time.Time) {
+func (m *Metrics) GetStats() (internal int64, cacheHits int64, cacheMisses int64, blockedFromBlocklist int64, geoipNodeCount uint, geoipBuildEpoch time.Time) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.internalAccepted.Load(), m.cacheHits.Load(), m.cacheMisses.Load(), m.geoipNodeCount, m.geoipBuildEpoch
+	return m.internalAccepted.Load(), m.cacheHits.Load(), m.cacheMisses.Load(), m.blockedFromBlocklist.Load(), m.geoipNodeCount, m.geoipBuildEpoch
 }
 
 func (m *Metrics) GetCountryStats() (blocked map[string]int64, allowed map[string]int64) {
@@ -118,7 +123,7 @@ func (m *Metrics) GetHostStats() (blocked map[string]int64, allowed map[string]i
 }
 
 func metricsHandler(w http.ResponseWriter, r *http.Request) {
-	internal, cacheHits, cacheMisses, geoipNodeCount, geoipBuildEpoch := metrics.GetStats()
+	internal, cacheHits, cacheMisses, blockedFromBlocklist, geoipNodeCount, geoipBuildEpoch := metrics.GetStats()
 	blockedPerCountry, allowedPerCountry := metrics.GetCountryStats()
 	blockedPerHost, allowedPerHost := metrics.GetHostStats()
 
@@ -136,6 +141,10 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "# HELP cache_misses_total Counter of cache misses\n")
 	fmt.Fprintf(w, "# TYPE cache_misses_total counter\n")
 	fmt.Fprintf(w, "cache_misses_total %d\n\n", cacheMisses)
+
+	fmt.Fprintf(w, "# HELP blocked_from_blocklist_total Counter of requests blocked by blocklists\n")
+	fmt.Fprintf(w, "# TYPE blocked_from_blocklist_total counter\n")
+	fmt.Fprintf(w, "blocked_from_blocklist_total %d\n\n", blockedFromBlocklist)
 
 	fmt.Fprintf(w, "# HELP geoip_node_count Total number of nodes in GeoIP database\n")
 	fmt.Fprintf(w, "# TYPE geoip_node_count gauge\n")
