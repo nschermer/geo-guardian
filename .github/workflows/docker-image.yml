@@ -54,6 +54,8 @@ jobs:
           file: ./app/Dockerfile
           platforms: linux/amd64,linux/arm/v7,linux/arm64/v8,linux/riscv64,linux/ppc64le,linux/s390x
           push: ${{ startsWith(github.ref, 'refs/tags/') }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             VERSION=${{ steps.get_version.outputs.VERSION }}
             BUILD_DATE=${{ steps.build_meta.outputs.BUILD_DATE }}
