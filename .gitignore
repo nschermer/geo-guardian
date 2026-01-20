@@ -2,6 +2,7 @@
 # Ignore system files
 .DS_Store
 Thumbs.db
+*.exe
 
 # Ignore by IDEs
 .vscode/
