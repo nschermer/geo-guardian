@@ -58,7 +58,7 @@ You will need a (free) MaxMind account to obtain an account ID and license key b
 - `LOCAL_IPS` (optional): Comma-separated list of local IP ranges in CIDR notation
   - Default: `192.168.0.0/16,10.0.0.0/8,127.0.0.0/8`
 - `ACCEPT_COUNTRY_CODES` (optional): Comma-separated list of allowed country codes (ISO 3166-1 alpha-2)
-  - Example: `US,CA,GB,DE`
+  - Example: `NL,BE,DE,LU`
 - `ACCEPT_EUROPEAN_UNION` (optional): When set to a truthy value (`true`, `1`, `yes`), allows any country flagged as part of the EU by GeoIP (`IsInEuropeanUnion`)
 - `BLOCK_COUNTRY_CODES` (optional): Comma-separated list of blocked country codes (ISO 3166-1 alpha-2)
   - Example: `CN,RU,US`
