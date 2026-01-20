@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // Metrics tracks request statistics
@@ -18,7 +19,7 @@ type Metrics struct {
 	blockedPerHost    map[string]int64
 	allowedPerHost    map[string]int64
 	geoipNodeCount    uint
-	geoipBuildEpoch   uint
+	geoipBuildEpoch   time.Time
 }
 
 func (m *Metrics) RecordInternalRequest() {
@@ -67,14 +68,14 @@ func (m *Metrics) RecordCacheMiss() {
 	m.cacheMisses.Add(1)
 }
 
-func (m *Metrics) SetGeoIPInfo(nodeCount uint, buildEpoch uint) {
+func (m *Metrics) SetGeoIPInfo(nodeCount uint, buildEpoch time.Time) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.geoipNodeCount = nodeCount
 	m.geoipBuildEpoch = buildEpoch
 }
 
-func (m *Metrics) GetStats() (internal int64, cacheHits int64, cacheMisses int64, geoipNodeCount uint, geoipBuildEpoch uint) {
+func (m *Metrics) GetStats() (internal int64, cacheHits int64, cacheMisses int64, geoipNodeCount uint, geoipBuildEpoch time.Time) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.internalAccepted.Load(), m.cacheHits.Load(), m.cacheMisses.Load(), m.geoipNodeCount, m.geoipBuildEpoch
@@ -138,7 +139,11 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, "# HELP geoip_node_count Total number of nodes in GeoIP database\n")
 	fmt.Fprintf(w, "# TYPE geoip_node_count gauge\n")
-	fmt.Fprintf(w, "geoip_node_count{build_epoch=\"%d\"} %d\n\n", geoipBuildEpoch, geoipNodeCount)
+	fmt.Fprintf(w, "geoip_node_count %d\n\n", geoipNodeCount)
+
+	fmt.Fprintf(w, "# HELP geoip_build_timestamp GeoIP database build timestamp in milliseconds\n")
+	fmt.Fprintf(w, "# TYPE geoip_build_timestamp gauge\n")
+	fmt.Fprintf(w, "geoip_build_timestamp{date=\"%s\"} %d\n\n", geoipBuildEpoch.Format(time.RFC3339), geoipBuildEpoch.UnixMilli())
 
 	if len(allowedPerCountry) > 0 {
 		fmt.Fprintf(w, "# HELP accepted_country_total Counter of requests accepted per country\n")
