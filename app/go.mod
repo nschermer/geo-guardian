@@ -1,6 +1,6 @@
 module github.com/nick/geo-guardian
 
-go 1.25.1
+go 1.26.1
 
 require github.com/oschwald/geoip2-golang/v2 v2.1.0
 
