@@ -1,3 +1,3 @@
 module github.com/nick/geo-guardian/benchtool
 
-go 1.21
+go 1.26.1

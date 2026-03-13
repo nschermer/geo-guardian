@@ -30,7 +30,7 @@ Requests are allowed, or blocked, if they match either criteria.
 - Compatible with MaxMind's `geoipupdate` utility
 
 ### 📊 **Built-in Observability**
-- **Native Prometheus metrics** for Grafana integration
+- **Native Prometheus metrics** for [Grafana integration](https://grafana.com/grafana/dashboards/24717-geo-guardian/)
 - Per-country, per-host statistics out of the box
 - Cache performance monitoring included
 - No additional plugins or exporters needed

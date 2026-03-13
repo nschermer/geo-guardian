@@ -161,9 +161,10 @@ func (g *GeoIPDB) Load() error {
 
 	// Record GeoIP database node count
 	metadata := newReader.Metadata()
-	metrics.SetGeoIPInfo(metadata.NodeCount, metadata.BuildEpoch)
+	var utcTime = time.Unix(int64(metadata.BuildEpoch), 0).UTC()
+	metrics.SetGeoIPInfo(metadata.NodeCount, utcTime)
 
-	logger.Printf("GeoIP2 database loaded, build date: %s\n", time.Unix(int64(metadata.BuildEpoch), 0).UTC().Format(time.RFC3339))
+	logger.Printf("GeoIP2 database loaded, build date: %s\n", utcTime.Format(time.RFC3339))
 
 	// Clear cache after reload
 	countryCache.Clear()
