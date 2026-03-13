@@ -25,9 +25,9 @@ Requests are allowed, or blocked, if they match either criteria.
 - Clean integration via ForwardAuth middleware
 
 ### 🔄 **Automated Database Updates**
-- **Easy to keep up-to-date** using MaxMind's official update tools
-- Automatic database reload every 15 minutes (no restarts needed)
-- Compatible with MaxMind's `geoipupdate` utility
+- **Easy to keep up-to-date** using MaxMind's official update tools.
+- The service checks the database file for modifications every 15 minutes and will hot-reload the database when a new version is detected (no restarts needed). The service itself does not download database updates.
+- Use MaxMind's `geoipupdate` utility (or another external mechanism) to perform the actual database downloads and replacements; this service will automatically pick up updated files.
 
 ### 📊 **Built-in Observability**
 - **Native Prometheus metrics** for [Grafana integration](https://grafana.com/grafana/dashboards/24717-geo-guardian/)
