@@ -252,9 +252,11 @@ func logDecision(action, ip, country, host, reason string) {
 	)
 }
 
+var okResponse = []byte("OK")
+
 func allowResponse(w http.ResponseWriter, country, host string) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	w.Write(okResponse)
 	metrics.RecordAllowedRequest(country, host)
 }
 
