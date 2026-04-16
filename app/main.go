@@ -503,12 +503,13 @@ func main() {
 	go reloadGeoIPPeriodically(ctx)
 
 	// Setup HTTP server
-	http.HandleFunc("/", indexHandler)
-	http.HandleFunc("/metrics", metricsHandler)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", indexHandler)
+	mux.HandleFunc("/metrics", metricsHandler)
 
 	server := &http.Server{
 		Addr:           hostAddr,
-		Handler:        nil,
+		Handler:        mux,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		IdleTimeout:    5 * time.Second,
