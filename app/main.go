@@ -277,10 +277,14 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ipAddressStr := forwardedFor
+	if idx := strings.Index(forwardedFor, ","); idx != -1 {
+		ipAddressStr = forwardedFor[:idx]
+	}
+	ipAddressStr = strings.TrimSpace(ipAddressStr)
+
 	// Extract requested host from X-Forwarded-Host header
 	requestedHost := r.Header.Get("X-Forwarded-Host")
-
-	ipAddressStr := strings.TrimSpace(strings.Split(forwardedFor, ",")[0])
 
 	// Parse the IP address
 	ipAddress, err := netip.ParseAddr(ipAddressStr)
