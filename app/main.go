@@ -503,11 +503,12 @@ func main() {
 	http.HandleFunc("/metrics", metricsHandler)
 
 	server := &http.Server{
-		Addr:         hostAddr,
-		Handler:      nil,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  5 * time.Second,
+		Addr:           hostAddr,
+		Handler:        nil,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		IdleTimeout:    5 * time.Second,
+		MaxHeaderBytes: 1 << 14, // 16 KB request header limit
 	}
 
 	// Handle graceful shutdown
