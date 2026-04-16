@@ -29,13 +29,13 @@ type GeoIPDB struct {
 // CountryCache implements an LRU cache for country code lookups
 type CountryCache struct {
 	mu      sync.RWMutex
-	cache   map[string]*list.Element
+	cache   map[netip.Addr]*list.Element
 	list    *list.List
 	maxSize int
 }
 
 type cacheEntry struct {
-	key  string
+	key  netip.Addr
 	info CountryInfo
 }
 
@@ -74,13 +74,13 @@ func newGeoIPDB(path string) *GeoIPDB {
 
 func newCountryCache(maxSize int) *CountryCache {
 	return &CountryCache{
-		cache:   make(map[string]*list.Element),
+		cache:   make(map[netip.Addr]*list.Element),
 		list:    list.New(),
 		maxSize: maxSize,
 	}
 }
 
-func (c *CountryCache) Get(ip string) (CountryInfo, bool) {
+func (c *CountryCache) Get(ip netip.Addr) (CountryInfo, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	elem, found := c.cache[ip]
@@ -92,7 +92,7 @@ func (c *CountryCache) Get(ip string) (CountryInfo, bool) {
 	return elem.Value.(cacheEntry).info, true
 }
 
-func (c *CountryCache) Set(ip string, info CountryInfo) {
+func (c *CountryCache) Set(ip netip.Addr, info CountryInfo) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -122,7 +122,7 @@ func (c *CountryCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.cache = make(map[string]*list.Element)
+	c.cache = make(map[netip.Addr]*list.Element)
 	c.list = list.New()
 }
 
@@ -186,10 +186,8 @@ func (g *GeoIPDB) Close() error {
 }
 
 func getCountryInfo(ip netip.Addr) CountryInfo {
-	ipStr := ip.String()
-
 	// Check cache first
-	if info, found := countryCache.Get(ipStr); found {
+	if info, found := countryCache.Get(ip); found {
 		metrics.RecordCacheHit()
 		return info
 	}
@@ -215,7 +213,7 @@ func getCountryInfo(ip netip.Addr) CountryInfo {
 	}
 
 	// Cache the result
-	countryCache.Set(ipStr, info)
+	countryCache.Set(ip, info)
 
 	return info
 }
