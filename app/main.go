@@ -236,12 +236,22 @@ func reloadGeoIPPeriodically(ctx context.Context) {
 	}
 }
 
+func sanitizeLog(s string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(s, "\n", ""), "\r", "")
+}
+
 func logDecision(action, ip, country, host, reason string) {
 	if !verboseLogging {
 		return
 	}
 
-	logger.Printf("%s ip=%s country=%s host=%s reason=%s", strings.ToUpper(action), ip, country, host, reason)
+	logger.Printf("%s ip=%s country=%s host=%s reason=%s",
+		strings.ToUpper(action),
+		sanitizeLog(ip),
+		country,
+		sanitizeLog(host),
+		reason,
+	)
 }
 
 func allowResponse(w http.ResponseWriter, country, host string) {
@@ -276,7 +286,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	ipAddress, err := netip.ParseAddr(ipAddressStr)
 	if err != nil {
 		http.Error(w, "Forbidden", http.StatusForbidden)
-		logger.Printf("Warning: Invalid IP address received: %s\n", ipAddressStr)
+		logger.Printf("Warning: Invalid IP address received: %s\n", sanitizeLog(ipAddressStr))
 		logDecision("block", ipAddressStr, "", requestedHost, "invalid_ip")
 		return
 	}
