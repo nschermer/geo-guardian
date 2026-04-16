@@ -156,7 +156,10 @@ func (g *GeoIPDB) Load() error {
 	g.mu.Unlock()
 
 	if oldReader != nil {
-		oldReader.Close()
+		// Delay closing the old reader to ensure any in-flight lookups complete
+		time.AfterFunc(1*time.Minute, func() {
+			oldReader.Close()
+		})
 	}
 
 	// Record GeoIP database node count
