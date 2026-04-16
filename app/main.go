@@ -253,7 +253,8 @@ func denyResponse(w http.ResponseWriter, country, host string) {
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	// Read IP address from X-Forwarded-For header
+	// Read IP address from X-Forwarded-For header, which is always trusted
+	// as it is set by the upstream Traefik reverse proxy.
 	// Handle comma-separated list, take first IP (actual client)
 	forwardedFor := r.Header.Get("X-Forwarded-For")
 	if forwardedFor == "" {
