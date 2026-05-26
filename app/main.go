@@ -162,10 +162,7 @@ func (g *GeoIPDB) Load() error {
 	g.mu.Unlock()
 
 	if oldReader != nil {
-		// Delay closing the old reader to ensure any in-flight lookups complete
-		time.AfterFunc(1*time.Minute, func() {
-			oldReader.Close()
-		})
+		oldReader.Close()
 	}
 
 	// Record GeoIP database node count
@@ -200,15 +197,16 @@ func getCountryInfo(ip netip.Addr) CountryInfo {
 
 	metrics.RecordCacheMiss()
 
+	// Hold RLock for the entire lookup so Load() can safely close the old
+	// reader immediately after its write-lock swap completes.
 	geoipDB.mu.RLock()
-	reader := geoipDB.reader
-	geoipDB.mu.RUnlock()
+	defer geoipDB.mu.RUnlock()
 
-	if reader == nil {
+	if geoipDB.reader == nil {
 		return CountryInfo{}
 	}
 
-	record, err := reader.Country(ip)
+	record, err := geoipDB.reader.Country(ip)
 	if err != nil {
 		return CountryInfo{}
 	}
