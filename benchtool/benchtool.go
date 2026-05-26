@@ -188,9 +188,6 @@ func main() {
 	server := os.Args[1]
 	port := os.Args[2]
 
-	// Seed random number generator
-	rand.Seed(time.Now().UnixNano())
-
 	// Generate IPs
 	ips := generateIPs(10000, 0.1)
 
