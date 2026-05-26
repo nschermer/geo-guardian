@@ -77,27 +77,23 @@ func (m *Metrics) GetStats() (internal int64, cacheHits int64, cacheMisses int64
 	return m.internalAccepted.Load(), m.cacheHits.Load(), m.cacheMisses.Load(), m.geoipNodeCount, m.geoipBuildEpoch
 }
 
-func syncMapToMap(sm *sync.Map) map[string]int64 {
-	out := make(map[string]int64)
+func writeSyncMapMetrics(buf *bytes.Buffer, sm *sync.Map, help, metricType, metricName, labelKey string) {
+	first := true
 	sm.Range(func(k, v any) bool {
-		out[k.(string)] = v.(*atomic.Int64).Load()
+		if first {
+			fmt.Fprintf(buf, "# HELP %s %s\n# TYPE %s %s\n", metricName, help, metricName, metricType)
+			first = false
+		}
+		fmt.Fprintf(buf, "%s{%s=\"%s\"} %d\n", metricName, labelKey, k.(string), v.(*atomic.Int64).Load())
 		return true
 	})
-	return out
-}
-
-func (m *Metrics) GetCountryStats() (blocked map[string]int64, allowed map[string]int64) {
-	return syncMapToMap(&m.blockedPerCountry), syncMapToMap(&m.allowedPerCountry)
-}
-
-func (m *Metrics) GetHostStats() (blocked map[string]int64, allowed map[string]int64) {
-	return syncMapToMap(&m.blockedPerHost), syncMapToMap(&m.allowedPerHost)
+	if !first {
+		buf.WriteByte('\n')
+	}
 }
 
 func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	internal, cacheHits, cacheMisses, geoipNodeCount, geoipBuildEpoch := metrics.GetStats()
-	blockedPerCountry, allowedPerCountry := metrics.GetCountryStats()
-	blockedPerHost, allowedPerHost := metrics.GetHostStats()
 
 	var buf bytes.Buffer
 
@@ -122,40 +118,10 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(&buf, "# TYPE geoip_build_timestamp gauge\n")
 	fmt.Fprintf(&buf, "geoip_build_timestamp{date=\"%s\"} %d\n\n", geoipBuildEpoch.Format(time.RFC3339), geoipBuildEpoch.UnixMilli())
 
-	if len(allowedPerCountry) > 0 {
-		fmt.Fprintf(&buf, "# HELP accepted_country_total Counter of requests accepted per country\n")
-		fmt.Fprintf(&buf, "# TYPE accepted_country_total counter\n")
-		for country, count := range allowedPerCountry {
-			fmt.Fprintf(&buf, "accepted_country_total{country=\"%s\"} %d\n", country, count)
-		}
-		buf.WriteByte('\n')
-	}
-
-	if len(blockedPerCountry) > 0 {
-		fmt.Fprintf(&buf, "# HELP blocked_country_total Counter of requests blocked per country\n")
-		fmt.Fprintf(&buf, "# TYPE blocked_country_total counter\n")
-		for country, count := range blockedPerCountry {
-			fmt.Fprintf(&buf, "blocked_country_total{country=\"%s\"} %d\n", country, count)
-		}
-		buf.WriteByte('\n')
-	}
-
-	if len(allowedPerHost) > 0 {
-		fmt.Fprintf(&buf, "# HELP accepted_host_total Counter of requests accepted per host\n")
-		fmt.Fprintf(&buf, "# TYPE accepted_host_total counter\n")
-		for host, count := range allowedPerHost {
-			fmt.Fprintf(&buf, "accepted_host_total{host=\"%s\"} %d\n", host, count)
-		}
-		buf.WriteByte('\n')
-	}
-
-	if len(blockedPerHost) > 0 {
-		fmt.Fprintf(&buf, "# HELP blocked_host_total Counter of requests blocked per host\n")
-		fmt.Fprintf(&buf, "# TYPE blocked_host_total counter\n")
-		for host, count := range blockedPerHost {
-			fmt.Fprintf(&buf, "blocked_host_total{host=\"%s\"} %d\n", host, count)
-		}
-	}
+	writeSyncMapMetrics(&buf, &metrics.allowedPerCountry, "Counter of requests accepted per country", "counter", "accepted_country_total", "country")
+	writeSyncMapMetrics(&buf, &metrics.blockedPerCountry, "Counter of requests blocked per country", "counter", "blocked_country_total", "country")
+	writeSyncMapMetrics(&buf, &metrics.allowedPerHost, "Counter of requests accepted per host", "counter", "accepted_host_total", "host")
+	writeSyncMapMetrics(&buf, &metrics.blockedPerHost, "Counter of requests blocked per host", "counter", "blocked_host_total", "host")
 
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	w.Write(buf.Bytes())
