@@ -81,15 +81,23 @@ func newCountryCache(maxSize int) *CountryCache {
 }
 
 func (c *CountryCache) Get(ip netip.Addr) (CountryInfo, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
 	elem, found := c.cache[ip]
 	if !found {
+		c.mu.RUnlock()
 		return CountryInfo{}, false
 	}
-	// Move to front (most recently used)
-	c.list.MoveToFront(elem)
-	return elem.Value.(cacheEntry).info, true
+	info := elem.Value.(cacheEntry).info
+	c.mu.RUnlock()
+
+	// Promote to front under write lock; recheck in case it was evicted
+	c.mu.Lock()
+	if e, ok := c.cache[ip]; ok {
+		c.list.MoveToFront(e)
+	}
+	c.mu.Unlock()
+
+	return info, true
 }
 
 func (c *CountryCache) Set(ip netip.Addr, info CountryInfo) {
