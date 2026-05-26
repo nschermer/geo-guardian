@@ -83,8 +83,8 @@ func benchmark(server, port string, ips []string) []float64 {
 			continue
 		}
 
-		// Ensure body is closed to prevent resource leaks
-		defer resp.Body.Close()
+		// Close body immediately to prevent resource leaks in loop
+		resp.Body.Close()
 		elapsedTimes = append(elapsedTimes, elapsed)
 
 		if (i+1)%1000 == 0 {
