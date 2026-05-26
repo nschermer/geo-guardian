@@ -58,12 +58,7 @@ var (
 	geoipDB      *GeoIPDB
 	countryCache = newCountryCache(1000)
 	logger       = log.New(os.Stdout, "", log.LstdFlags)
-	metrics      = &Metrics{
-		blockedPerCountry: make(map[string]int64),
-		allowedPerCountry: make(map[string]int64),
-		blockedPerHost:    make(map[string]int64),
-		allowedPerHost:    make(map[string]int64),
-	}
+	metrics      = &Metrics{}
 )
 
 func newGeoIPDB(path string) *GeoIPDB {
