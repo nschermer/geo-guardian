@@ -237,8 +237,10 @@ func reloadGeoIPPeriodically(ctx context.Context) {
 	}
 }
 
+var sanitizeLogReplacer = strings.NewReplacer("\n", "", "\r", "")
+
 func sanitizeLog(s string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(s, "\n", ""), "\r", "")
+	return sanitizeLogReplacer.Replace(s)
 }
 
 func logDecision(action, ip, country, host, reason string) {
