@@ -136,7 +136,10 @@ func (g *GeoIPDB) Load() error {
 	modTime := fileInfo.ModTime()
 
 	// Skip reload if file hasn't changed
-	if !g.modTime.IsZero() && modTime.Equal(g.modTime) {
+	g.mu.RLock()
+	unchanged := !g.modTime.IsZero() && modTime.Equal(g.modTime)
+	g.mu.RUnlock()
+	if unchanged {
 		if verboseLogging {
 			logger.Printf("GeoIP2 database unchanged, skipping reload\n")
 		}
