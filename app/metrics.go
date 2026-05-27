@@ -9,23 +9,57 @@ import (
 	"time"
 )
 
+// boundedSyncMap is a sync.Map that stops accepting new keys once max is reached.
+type boundedSyncMap struct {
+	m   sync.Map
+	n   atomic.Int64
+	max int64
+}
+
+func (b *boundedSyncMap) increment(key string) {
+	// Fast path: key already exists.
+	if v, ok := b.m.Load(key); ok {
+		v.(*atomic.Int64).Add(1)
+		return
+	}
+	// Slow path: new key — enforce cap before storing.
+	if b.n.Load() >= b.max {
+		return
+	}
+	newVal := &atomic.Int64{}
+	newVal.Add(1)
+	if _, loaded := b.m.LoadOrStore(key, newVal); !loaded {
+		b.n.Add(1)
+	}
+}
+
+func (b *boundedSyncMap) rangeEntries(fn func(key string, val int64) bool) {
+	b.m.Range(func(k, v any) bool {
+		return fn(k.(string), v.(*atomic.Int64).Load())
+	})
+}
+
 // Metrics tracks request statistics
 type Metrics struct {
 	internalAccepted  atomic.Int64
 	cacheHits         atomic.Int64
 	cacheMisses       atomic.Int64
-	blockedPerCountry sync.Map // string -> *atomic.Int64
-	allowedPerCountry sync.Map
-	blockedPerHost    sync.Map
-	allowedPerHost    sync.Map
+	blockedPerCountry boundedSyncMap // capped at 500 (≈250 real country codes)
+	allowedPerCountry boundedSyncMap
+	blockedPerHost    boundedSyncMap // capped at 10 000
+	allowedPerHost    boundedSyncMap
 	mu                sync.RWMutex // only guards geoipNodeCount and geoipBuildEpoch
 	geoipNodeCount    uint
 	geoipBuildEpoch   time.Time
 }
 
-func incrementSyncMap(m *sync.Map, key string) {
-	v, _ := m.LoadOrStore(key, &atomic.Int64{})
-	v.(*atomic.Int64).Add(1)
+func newMetrics() *Metrics {
+	m := &Metrics{}
+	m.blockedPerCountry.max = 500
+	m.allowedPerCountry.max = 500
+	m.blockedPerHost.max = 10_000
+	m.allowedPerHost.max = 10_000
+	return m
 }
 
 func (m *Metrics) RecordInternalRequest() {
@@ -34,25 +68,25 @@ func (m *Metrics) RecordInternalRequest() {
 
 func (m *Metrics) RecordAllowedRequest(country, host string) {
 	if country != "" {
-		incrementSyncMap(&m.allowedPerCountry, country)
+		m.allowedPerCountry.increment(country)
 	}
 	if host != "" {
-		incrementSyncMap(&m.allowedPerHost, host)
+		m.allowedPerHost.increment(host)
 	}
 }
 
 func (m *Metrics) RecordBlockedRequest(country, host string) {
 	if country != "" {
-		incrementSyncMap(&m.blockedPerCountry, country)
+		m.blockedPerCountry.increment(country)
 	}
 	if host != "" {
-		incrementSyncMap(&m.blockedPerHost, host)
+		m.blockedPerHost.increment(host)
 	}
 }
 
 func (m *Metrics) RecordAllowedHost(host string) {
 	if host != "" {
-		incrementSyncMap(&m.allowedPerHost, host)
+		m.allowedPerHost.increment(host)
 	}
 }
 
@@ -77,14 +111,14 @@ func (m *Metrics) GetStats() (internal int64, cacheHits int64, cacheMisses int64
 	return m.internalAccepted.Load(), m.cacheHits.Load(), m.cacheMisses.Load(), m.geoipNodeCount, m.geoipBuildEpoch
 }
 
-func writeSyncMapMetrics(buf *bytes.Buffer, sm *sync.Map, help, metricType, metricName, labelKey string) {
+func writeSyncMapMetrics(buf *bytes.Buffer, sm *boundedSyncMap, help, metricType, metricName, labelKey string) {
 	first := true
-	sm.Range(func(k, v any) bool {
+	sm.rangeEntries(func(k string, val int64) bool {
 		if first {
 			fmt.Fprintf(buf, "# HELP %s %s\n# TYPE %s %s\n", metricName, help, metricName, metricType)
 			first = false
 		}
-		fmt.Fprintf(buf, "%s{%s=\"%s\"} %d\n", metricName, labelKey, k.(string), v.(*atomic.Int64).Load())
+		fmt.Fprintf(buf, "%s{%s=\"%s\"} %d\n", metricName, labelKey, k, val)
 		return true
 	})
 	if !first {
