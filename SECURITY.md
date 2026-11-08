@@ -47,9 +47,10 @@ Please include the following information in your report:
 
 ### Container Security
 
+- The image runs as an unprivileged user (UID 10001); the binary holds only `CAP_NET_BIND_SERVICE` so it can listen on port 80
+- The GeoIP database file must be readable by that user (geoipupdate writes it world-readable by default)
 - Run the container with the least privileges necessary
 - Use read-only root filesystem when possible
-- Do not run as root in production environments
 - Regularly rebuild containers to receive upstream security patches
 - Scan images for vulnerabilities using tools like Trivy or similar
 

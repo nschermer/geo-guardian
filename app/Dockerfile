@@ -28,14 +28,25 @@ FROM alpine:latest
 ARG VERSION=dev
 ARG BUILD_DATE=unknown
 
-WORKDIR /root/
-
 LABEL org.opencontainers.image.version="$VERSION" \
 	org.opencontainers.image.created="$BUILD_DATE"
+
+WORKDIR /app
 
 # Copy the binary from builder
 COPY --from=builder /app/geo-guardian .
 
+# Run as an unprivileged user. The binary gets CAP_NET_BIND_SERVICE so it can
+# still listen on the default port 80 on runtimes that don't lower
+# net.ipv4.ip_unprivileged_port_start for containers (e.g. Kubernetes).
+RUN addgroup -S -g 10001 geoguardian \
+	&& adduser -S -D -H -u 10001 -G geoguardian -s /sbin/nologin geoguardian \
+	&& apk --no-cache add libcap \
+	&& setcap cap_net_bind_service=+ep /app/geo-guardian \
+	&& apk del libcap
+
+USER 10001:10001
+
 EXPOSE 80
 
-CMD ["./geo-guardian"]
+CMD ["/app/geo-guardian"]
