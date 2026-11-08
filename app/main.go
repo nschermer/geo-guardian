@@ -270,16 +270,36 @@ func logDecision(action, ip, country, host, reason string) {
 	)
 }
 
-var okResponse = []byte("OK")
+// Pre-built responses so the hot path doesn't allocate. The header value
+// slices are shared between responses and must never be modified.
+var (
+	okResponse        = []byte("OK")
+	forbiddenResponse = []byte("Forbidden\n")
+	textPlainHeader   = []string{"text/plain; charset=utf-8"}
+	nosniffHeader     = []string{"nosniff"}
+)
 
 func allowResponse(w http.ResponseWriter, country, host string) {
+	// Setting Content-Type up front stops net/http from sniffing the body;
+	// the value is what sniffing would produce.
+	w.Header()["Content-Type"] = textPlainHeader
 	w.WriteHeader(http.StatusOK)
 	w.Write(okResponse)
 	metrics.RecordAllowedRequest(country, host)
 }
 
+// writeForbidden writes the same response as
+// http.Error(w, "Forbidden", http.StatusForbidden) without allocating.
+func writeForbidden(w http.ResponseWriter) {
+	h := w.Header()
+	h["Content-Type"] = textPlainHeader
+	h["X-Content-Type-Options"] = nosniffHeader
+	w.WriteHeader(http.StatusForbidden)
+	w.Write(forbiddenResponse)
+}
+
 func denyResponse(w http.ResponseWriter, country, host string) {
-	http.Error(w, "Forbidden", http.StatusForbidden)
+	writeForbidden(w)
 	metrics.RecordBlockedRequest(country, host)
 }
 
@@ -289,7 +309,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	// Handle comma-separated list, take first IP (actual client)
 	forwardedFor := r.Header.Get("X-Forwarded-For")
 	if forwardedFor == "" {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeForbidden(w)
 		logger.Println("Warning: Missing X-Forwarded-For header")
 		logDecision("block", "", "", "", "missing_x_forwarded_for_header")
 		return
@@ -307,7 +327,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse the IP address
 	ipAddress, err := netip.ParseAddr(ipAddressStr)
 	if err != nil {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeForbidden(w)
 		logger.Printf("Warning: Invalid IP address received: %s\n", sanitizeLog(ipAddressStr))
 		logDecision("block", ipAddressStr, "", requestedHost, "invalid_ip")
 		return
