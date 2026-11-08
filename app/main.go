@@ -524,8 +524,11 @@ func main() {
 		MaxHeaderBytes: 1 << 14, // 16 KB request header limit
 	}
 
-	// Handle graceful shutdown
+	// Handle graceful shutdown. ListenAndServe returns as soon as Shutdown
+	// starts, so main waits on shutdownDone for in-flight requests to drain.
+	shutdownDone := make(chan struct{})
 	go func() {
+		defer close(shutdownDone)
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 		<-sigChan
@@ -544,4 +547,5 @@ func main() {
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logger.Fatalf("Server error: %v\n", err)
 	}
+	<-shutdownDone
 }
