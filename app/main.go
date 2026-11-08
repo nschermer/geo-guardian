@@ -305,11 +305,13 @@ func denyResponse(w http.ResponseWriter, country, host string) {
 	metrics.RecordBlockedRequest(country, host)
 }
 
-// firstHeader returns the first value of a header, like http.Header.Get, but
-// skips re-canonicalizing the key. net/http already canonicalizes incoming
-// header keys, so key must be given in canonical form.
-func firstHeader(h http.Header, key string) string {
-	if v := h[key]; len(v) > 0 {
+// firstValue returns the first value of a header slice. Callers index
+// r.Header directly with the canonical key instead of calling Header.Get,
+// which skips re-canonicalizing a key net/http has already canonicalized.
+// Keep the key a string literal at the call site: CodeQL only treats header
+// reads with a constant name as non-sensitive.
+func firstValue(v []string) string {
+	if len(v) > 0 {
 		return v[0]
 	}
 	return ""
@@ -341,7 +343,7 @@ func clientAddr(forwardedFor string, trustedProxies int) string {
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	// Traefik sets X-Forwarded-For on the ForwardAuth request; see clientAddr
 	// for which entry is trusted.
-	forwardedFor := firstHeader(r.Header, "X-Forwarded-For")
+	forwardedFor := firstValue(r.Header["X-Forwarded-For"])
 	if forwardedFor == "" {
 		writeForbidden(w)
 		logger.Println("Warning: Missing X-Forwarded-For header")
@@ -352,7 +354,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	ipAddressStr := clientAddr(forwardedFor, trustedProxyCount)
 
 	// Extract requested host from X-Forwarded-Host header
-	requestedHost := firstHeader(r.Header, "X-Forwarded-Host")
+	requestedHost := firstValue(r.Header["X-Forwarded-Host"])
 
 	// Parse the IP address
 	ipAddress, err := netip.ParseAddr(ipAddressStr)
