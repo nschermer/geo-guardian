@@ -182,10 +182,12 @@ func (g *GeoIPDB) Close() error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	if g.reader != nil {
-		return g.reader.Close()
+	if g.reader == nil {
+		return nil
 	}
-	return nil
+	err := g.reader.Close()
+	g.reader = nil
+	return err
 }
 
 func getCountryInfo(ip netip.Addr) CountryInfo {
