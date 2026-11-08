@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -65,6 +66,7 @@ var (
 	countryCodes        map[string]bool
 	blockCountryCodes   map[string]bool
 	acceptEuropeanUnion bool
+	trustedProxyCount   int
 	verboseLogging      bool
 	version             = "dev"
 	buildDate           = "unknown"
@@ -313,10 +315,32 @@ func firstHeader(h http.Header, key string) string {
 	return ""
 }
 
+// clientAddr picks the client address out of an X-Forwarded-For value.
+//
+// The header lists one address per hop, oldest first. Traefik appends the
+// address that connected to it, so the last entry is always trustworthy;
+// each trusted proxy in front of Traefik (a CDN or load balancer) adds one
+// more trustworthy entry to the right. Everything left of those could have
+// been sent by the client, so it is never used. If the header has fewer
+// entries than expected, every entry came from a trusted hop and the first
+// one is the client.
+func clientAddr(forwardedFor string, trustedProxies int) string {
+	for {
+		idx := strings.LastIndexByte(forwardedFor, ',')
+		if idx < 0 {
+			return strings.TrimSpace(forwardedFor)
+		}
+		if trustedProxies == 0 {
+			return strings.TrimSpace(forwardedFor[idx+1:])
+		}
+		trustedProxies--
+		forwardedFor = forwardedFor[:idx]
+	}
+}
+
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	// Read IP address from X-Forwarded-For header, which is always trusted
-	// as it is set by the upstream Traefik reverse proxy.
-	// Handle comma-separated list, take first IP (actual client)
+	// Traefik sets X-Forwarded-For on the ForwardAuth request; see clientAddr
+	// for which entry is trusted.
 	forwardedFor := firstHeader(r.Header, "X-Forwarded-For")
 	if forwardedFor == "" {
 		writeForbidden(w)
@@ -325,11 +349,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ipAddressStr := forwardedFor
-	if idx := strings.Index(forwardedFor, ","); idx != -1 {
-		ipAddressStr = forwardedFor[:idx]
-	}
-	ipAddressStr = strings.TrimSpace(ipAddressStr)
+	ipAddressStr := clientAddr(forwardedFor, trustedProxyCount)
 
 	// Extract requested host from X-Forwarded-Host header
 	requestedHost := firstHeader(r.Header, "X-Forwarded-Host")
@@ -481,6 +501,19 @@ func parseBoolEnv(key string) bool {
 	return value == "1" || value == "true" || value == "t" || value == "yes" || value == "y" || value == "on"
 }
 
+// parseCountEnv reads a non-negative integer, returning 0 when unset.
+func parseCountEnv(key string) (int, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative integer, got %q", key, value)
+	}
+	return n, nil
+}
+
 func main() {
 	// Read environment variables
 	localIPsStr := os.Getenv("LOCAL_IPS")
@@ -502,6 +535,14 @@ func main() {
 	verboseLogging = parseBoolEnv("VERBOSE")
 
 	logger.Printf("Geo Guardian version %s (%s)", version, buildDate)
+
+	var err error
+	if trustedProxyCount, err = parseCountEnv("TRUSTED_PROXY_COUNT"); err != nil {
+		logger.Fatalf("Error parsing TRUSTED_PROXY_COUNT: %v\n", err)
+	}
+	if trustedProxyCount > 0 {
+		logger.Printf("Trusting %d proxy hop(s) in front of Traefik in X-Forwarded-For\n", trustedProxyCount)
+	}
 
 	// Validate mutual exclusivity
 	if blockCountryCodesStr != "" && (countryCodesStr != "" || acceptEuropeanUnion) {

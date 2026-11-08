@@ -26,6 +26,7 @@ Please include the following information in your report:
 ### Network Security
 
 - **ForwardAuth Middleware**: Geo Guardian is designed as a ForwardAuth middleware for Traefik
+- **Client IP source**: the client address is taken from the *last* entry of `X-Forwarded-For`, which Traefik sets to the address that connected to it. Entries further left can be supplied by the client and are ignored. If a CDN or load balancer sits in front of Traefik, set `TRUSTED_PROXY_COUNT` to the number of such hops so the right entry is used
 - Ensure that only your reverse proxy can reach the service directly
 - Do not expose Geo Guardian's port directly to the internet
 - Configure appropriate firewall rules to restrict access to the service

@@ -56,7 +56,9 @@ You will need a (free) MaxMind account to obtain an account ID and license key b
 - `HOST_ADDR` (optional): Server host address to listen on
   - Default: `:80`
 - `LOCAL_IPS` (optional): Comma-separated list of local IP ranges in CIDR notation
-  - Default: `192.168.0.0/16,10.0.0.0/8,127.0.0.0/8`
+  - Default: `192.168.0.0/16,10.0.0.0/8,127.0.0.0/8,fd00::/8`
+- `TRUSTED_PROXY_COUNT` (optional): Number of trusted proxies (CDN, load balancer) in front of Traefik. The client IP is taken from the `X-Forwarded-For` entry that many positions before the last one; see [Client IP detection](#-client-ip-detection)
+  - Default: `0` (Traefik is the edge; the last entry is the client)
 - `ACCEPT_COUNTRY_CODES` (optional): Comma-separated list of allowed country codes (ISO 3166-1 alpha-2)
   - Example: `NL,BE,DE,LU`
 - `ACCEPT_EUROPEAN_UNION` (optional): When set to a truthy value (`true`, `1`, `yes`), allows any country flagged as part of the EU by GeoIP (`IsInEuropeanUnion`)
@@ -131,12 +133,25 @@ The tool prints mean, median, p99, min, and max latencies for the successful req
 Checks if the client IP is allowed based on configured rules.
 
 **Request Headers:**
-- `X-Forwarded-For`: Client IP address (required)
+- `X-Forwarded-For`: Proxy chain set by Traefik (required); see [Client IP detection](#-client-ip-detection)
 - `X-Forwarded-Host`: Original requested host (optional, used for host-level metrics/logging)
 
 **Response:**
 - `200 OK` with body "OK" - Access allowed
 - `403 Forbidden` with body "Forbidden" - Access denied
+
+### 🔎 Client IP detection
+
+`X-Forwarded-For` lists one address per hop, oldest first. Traefik appends the address that connected to it, so the **last** entry is always trustworthy, while entries further left may have been sent by the client (Traefik forwards them when `trustForwardHeader` is enabled on the ForwardAuth middleware). Geo Guardian therefore uses the last entry by default.
+
+If a CDN or load balancer sits in front of Traefik, the last entry is that proxy's address. Set `TRUSTED_PROXY_COUNT` to the number of such hops and Geo Guardian skips that many entries from the right:
+
+```
+X-Forwarded-For: <client-supplied?>, <client>, <cdn>
+                                      ^ used with TRUSTED_PROXY_COUNT=1
+```
+
+Traefik must also trust those proxies at the entrypoint (`forwardedHeaders.trustedIPs`) and the ForwardAuth middleware needs `trustForwardHeader: true`, otherwise Traefik sends only the proxy's address.
 
 ### `GET /metrics`
 
