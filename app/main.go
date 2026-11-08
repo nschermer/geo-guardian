@@ -358,7 +358,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	ipAddress, err := netip.ParseAddr(ipAddressStr)
 	if err != nil {
 		writeForbidden(w)
-		logger.Printf("Warning: Invalid IP address received: %s\n", sanitizeLog(ipAddressStr))
+		logger.Println("Warning: Invalid IP address in X-Forwarded-For header")
 		logDecision("block", ipAddressStr, "", requestedHost, "invalid_ip")
 		return
 	}
