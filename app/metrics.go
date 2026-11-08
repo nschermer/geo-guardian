@@ -10,7 +10,12 @@ import (
 	"time"
 )
 
-// boundedSyncMap is a sync.Map that stops accepting new keys once max is reached.
+// overflowKey collects counts for new keys once a boundedSyncMap is full,
+// so totals stay correct and the overflow is visible in /metrics.
+const overflowKey = "__overflow__"
+
+// boundedSyncMap is a sync.Map that stops accepting new keys once max is
+// reached; counts for further new keys go to overflowKey instead.
 type boundedSyncMap struct {
 	m   sync.Map
 	n   atomic.Int64
@@ -23,13 +28,16 @@ func (b *boundedSyncMap) increment(key string) {
 		v.(*atomic.Int64).Add(1)
 		return
 	}
-	// Slow path: new key — enforce cap before storing.
+	// Slow path: new key. Once the cap is reached, count it under overflowKey
+	// (which does not count toward the cap).
+	counted := true
 	if b.n.Load() >= b.max {
-		return
+		key = overflowKey
+		counted = false
 	}
-	newVal := &atomic.Int64{}
-	newVal.Add(1)
-	if _, loaded := b.m.LoadOrStore(key, newVal); !loaded {
+	v, loaded := b.m.LoadOrStore(key, &atomic.Int64{})
+	v.(*atomic.Int64).Add(1)
+	if !loaded && counted {
 		b.n.Add(1)
 	}
 }
