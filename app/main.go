@@ -1,9 +1,9 @@
 package main
 
 import (
-	"container/list"
 	"context"
 	"fmt"
+	"hash/maphash"
 	"log"
 	"net/http"
 	"net/netip"
@@ -35,17 +35,22 @@ type geoIPRecord struct {
 	} `maxminddb:"country"`
 }
 
-// CountryCache implements an LRU cache for country code lookups
+// cacheShards must be a power of two.
+const cacheShards = 32
+
+// CountryCache is a sharded cache for country lookups. Hits only take a shard
+// read lock, so they scale across cores; when a shard is full an arbitrary
+// entry is evicted.
 type CountryCache struct {
-	mu      sync.RWMutex
-	cache   map[netip.Addr]*list.Element
-	list    *list.List
-	maxSize int
+	shards   [cacheShards]cacheShard
+	perShard int
+	seed     maphash.Seed
 }
 
-type cacheEntry struct {
-	key  netip.Addr
-	info CountryInfo
+type cacheShard struct {
+	mu sync.RWMutex
+	m  map[netip.Addr]CountryInfo
+	_  [32]byte // pad to a cache line to avoid false sharing between shards
 }
 
 // CountryInfo stores GeoIP-derived country information for a lookup
@@ -77,65 +82,53 @@ func newGeoIPDB(path string) *GeoIPDB {
 }
 
 func newCountryCache(maxSize int) *CountryCache {
-	return &CountryCache{
-		cache:   make(map[netip.Addr]*list.Element),
-		list:    list.New(),
-		maxSize: maxSize,
+	c := &CountryCache{
+		perShard: max(1, (maxSize+cacheShards-1)/cacheShards),
+		seed:     maphash.MakeSeed(),
 	}
+	for i := range c.shards {
+		c.shards[i].m = make(map[netip.Addr]CountryInfo, c.perShard)
+	}
+	return c
+}
+
+// shard picks a shard with a seeded hash, so clients can't steer all their
+// addresses into one shard.
+func (c *CountryCache) shard(ip netip.Addr) *cacheShard {
+	return &c.shards[maphash.Comparable(c.seed, ip)&(cacheShards-1)]
 }
 
 func (c *CountryCache) Get(ip netip.Addr) (CountryInfo, bool) {
-	c.mu.RLock()
-	elem, found := c.cache[ip]
-	if !found {
-		c.mu.RUnlock()
-		return CountryInfo{}, false
-	}
-	info := elem.Value.(cacheEntry).info
-	c.mu.RUnlock()
-
-	// Promote to front under write lock; recheck in case it was evicted
-	c.mu.Lock()
-	if e, ok := c.cache[ip]; ok {
-		c.list.MoveToFront(e)
-	}
-	c.mu.Unlock()
-
-	return info, true
+	s := c.shard(ip)
+	s.mu.RLock()
+	info, found := s.m[ip]
+	s.mu.RUnlock()
+	return info, found
 }
 
 func (c *CountryCache) Set(ip netip.Addr, info CountryInfo) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	s := c.shard(ip)
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	// If key already exists, update it and move to front
-	if elem, found := c.cache[ip]; found {
-		elem.Value = cacheEntry{key: ip, info: info}
-		c.list.MoveToFront(elem)
-		return
-	}
-
-	// If cache is at maxSize, remove least recently used (back of list)
-	if len(c.cache) >= c.maxSize {
-		lruElem := c.list.Back()
-		if lruElem != nil {
-			lruEntry := lruElem.Value.(cacheEntry)
-			c.list.Remove(lruElem)
-			delete(c.cache, lruEntry.key)
+	if _, found := s.m[ip]; !found && len(s.m) >= c.perShard {
+		// Map iteration starts at a random position, so this evicts an
+		// arbitrary entry.
+		for k := range s.m {
+			delete(s.m, k)
+			break
 		}
 	}
-
-	// Add new entry to front (most recently used)
-	elem := c.list.PushFront(cacheEntry{key: ip, info: info})
-	c.cache[ip] = elem
+	s.m[ip] = info
 }
 
 func (c *CountryCache) Clear() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.cache = make(map[netip.Addr]*list.Element)
-	c.list = list.New()
+	for i := range c.shards {
+		s := &c.shards[i]
+		s.mu.Lock()
+		clear(s.m)
+		s.mu.Unlock()
+	}
 }
 
 func (g *GeoIPDB) Load() error {
