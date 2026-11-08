@@ -28,8 +28,6 @@ FROM alpine:latest
 ARG VERSION=dev
 ARG BUILD_DATE=unknown
 
-RUN apk --no-cache add ca-certificates
-
 WORKDIR /root/
 
 LABEL org.opencontainers.image.version="$VERSION" \
