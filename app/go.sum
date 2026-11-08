@@ -1,5 +1,3 @@
-github.com/oschwald/geoip2-golang/v2 v2.5.0 h1:/t4eBuRbaaRXnZH4iQzuU+IevgJEH6XhBKhduWfjqiY=
-github.com/oschwald/geoip2-golang/v2 v2.5.0/go.mod h1:xqrzE9hxQpB5eYtF+V5dez567GMK5HGqrS5NuuFrTDc=
 github.com/oschwald/maxminddb-golang/v2 v2.9.0 h1:YpIl3WoA9oIuNvqNaO/aD1N/7Ci2wOqoKH5GWo53H5Y=
 github.com/oschwald/maxminddb-golang/v2 v2.9.0/go.mod h1:3TxexMBcR0ss3SbyYvnqfsDzDjN4o1KCg/nTsaMAivU=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=

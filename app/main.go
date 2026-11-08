@@ -15,15 +15,24 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/oschwald/geoip2-golang/v2"
+	"github.com/oschwald/maxminddb-golang/v2"
 )
 
 // GeoIPDB manages the GeoIP database reader with safe reloading
 type GeoIPDB struct {
 	mu      sync.RWMutex
 	path    string
-	reader  *geoip2.Reader
+	reader  *maxminddb.Reader
 	modTime time.Time
+}
+
+// geoIPRecord holds only the fields we use. Decoding into this instead of the
+// full geoip2 Country record skips the localized names and avoids allocating.
+type geoIPRecord struct {
+	Country struct {
+		ISOCode           string `maxminddb:"iso_code"`
+		IsInEuropeanUnion bool   `maxminddb:"is_in_european_union"`
+	} `maxminddb:"country"`
 }
 
 // CountryCache implements an LRU cache for country code lookups
@@ -150,9 +159,17 @@ func (g *GeoIPDB) Load() error {
 	}
 
 	// Create new reader before closing old one to avoid crashes during reload
-	newReader, err := geoip2.Open(g.path)
+	newReader, err := maxminddb.Open(g.path)
 	if err != nil {
 		return fmt.Errorf("failed to open GeoIP2 database: %w", err)
+	}
+
+	// Only Country, City and Enterprise databases have country data (the
+	// same set geoip2.Reader.Country accepts).
+	dbType := newReader.Metadata.DatabaseType
+	if !strings.Contains(dbType, "Country") && !strings.Contains(dbType, "City") && !strings.Contains(dbType, "Enterprise") {
+		newReader.Close()
+		return fmt.Errorf("unsupported GeoIP2 database type %q: need a Country, City or Enterprise database", dbType)
 	}
 
 	g.mu.Lock()
@@ -166,7 +183,7 @@ func (g *GeoIPDB) Load() error {
 	}
 
 	// Record GeoIP database node count
-	metadata := newReader.Metadata()
+	metadata := newReader.Metadata
 	var utcTime = time.Unix(int64(metadata.BuildEpoch), 0).UTC()
 	metrics.SetGeoIPInfo(metadata.NodeCount, utcTime)
 
@@ -208,8 +225,8 @@ func getCountryInfo(ip netip.Addr) CountryInfo {
 		return CountryInfo{}
 	}
 
-	record, err := geoipDB.reader.Country(ip)
-	if err != nil {
+	var record geoIPRecord
+	if err := geoipDB.reader.Lookup(ip).Decode(&record); err != nil {
 		return CountryInfo{}
 	}
 

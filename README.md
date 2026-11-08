@@ -157,5 +157,5 @@ This endpoint can be scraped by **Prometheus**, **Victoria Metrics**, or any Pro
 
 ## 📦 Dependencies
 
-- [geoip2-golang](https://github.com/oschwald/geoip2-golang) - MaxMind GeoIP2 reader
+- [maxminddb-golang](https://github.com/oschwald/maxminddb-golang) - MaxMind DB reader
 
