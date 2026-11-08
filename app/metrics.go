@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -111,6 +112,9 @@ func (m *Metrics) GetStats() (internal int64, cacheHits int64, cacheMisses int64
 	return m.internalAccepted.Load(), m.cacheHits.Load(), m.cacheMisses.Load(), m.geoipNodeCount, m.geoipBuildEpoch
 }
 
+// labelValueEscaper escapes label values per the Prometheus text format.
+var labelValueEscaper = strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`)
+
 func writeSyncMapMetrics(buf *bytes.Buffer, sm *boundedSyncMap, help, metricType, metricName, labelKey string) {
 	first := true
 	sm.rangeEntries(func(k string, val int64) bool {
@@ -118,7 +122,7 @@ func writeSyncMapMetrics(buf *bytes.Buffer, sm *boundedSyncMap, help, metricType
 			fmt.Fprintf(buf, "# HELP %s %s\n# TYPE %s %s\n", metricName, help, metricName, metricType)
 			first = false
 		}
-		fmt.Fprintf(buf, "%s{%s=\"%s\"} %d\n", metricName, labelKey, k, val)
+		fmt.Fprintf(buf, "%s{%s=\"%s\"} %d\n", metricName, labelKey, labelValueEscaper.Replace(k), val)
 		return true
 	})
 	if !first {
