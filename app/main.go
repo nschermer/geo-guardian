@@ -303,11 +303,21 @@ func denyResponse(w http.ResponseWriter, country, host string) {
 	metrics.RecordBlockedRequest(country, host)
 }
 
+// firstHeader returns the first value of a header, like http.Header.Get, but
+// skips re-canonicalizing the key. net/http already canonicalizes incoming
+// header keys, so key must be given in canonical form.
+func firstHeader(h http.Header, key string) string {
+	if v := h[key]; len(v) > 0 {
+		return v[0]
+	}
+	return ""
+}
+
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	// Read IP address from X-Forwarded-For header, which is always trusted
 	// as it is set by the upstream Traefik reverse proxy.
 	// Handle comma-separated list, take first IP (actual client)
-	forwardedFor := r.Header.Get("X-Forwarded-For")
+	forwardedFor := firstHeader(r.Header, "X-Forwarded-For")
 	if forwardedFor == "" {
 		writeForbidden(w)
 		logger.Println("Warning: Missing X-Forwarded-For header")
@@ -322,7 +332,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	ipAddressStr = strings.TrimSpace(ipAddressStr)
 
 	// Extract requested host from X-Forwarded-Host header
-	requestedHost := r.Header.Get("X-Forwarded-Host")
+	requestedHost := firstHeader(r.Header, "X-Forwarded-Host")
 
 	// Parse the IP address
 	ipAddress, err := netip.ParseAddr(ipAddressStr)
